@@ -972,6 +972,11 @@ icons on the MATE desktop.  It works on local and remote file systems.")
     (arguments
      (list #:phases
            #~(modify-phases %standard-phases
+               (add-before 'build 'fix-password-command-path
+                 (lambda _
+                   (substitute* "capplets/about-me/mate-about-me-password.c"
+                     (("/usr/bin/passwd")
+                      "/run/setuid-programs/passwd"))))
                (add-before 'build 'fix-polkit-action
                  (lambda _
                    ;; Make sure the polkit file refers to the right
