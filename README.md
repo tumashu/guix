@@ -1,0 +1,1 @@
+<marquee>GNU guix</marquee>
