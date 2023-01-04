@@ -16620,6 +16620,17 @@ function to be used by other frontend programs.")
          (sha256
           (base32 "0fzyh8qmicq2vy9j1ca708ir67dpxp1cwjaw0sw469p24cvj12yy"))))
       (build-system emacs-build-system)
+      (arguments
+       (list
+        #:phases
+        #~(modify-phases %standard-phases
+            (add-after 'install 'install-basedict-file
+              (lambda _
+                (install-file "pyim-basedict.pyim"
+                              (string-append
+                               #$output
+                               "/share/emacs/site-lisp/pyim-basedict-"
+                               #$version)))))))
       (propagated-inputs
        (list emacs-pyim))
       (home-page "https://github.com/tumashu/pyim-basedict")
