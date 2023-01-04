@@ -34100,6 +34100,63 @@ wraps GNU Global calls and integration to editor using this API with
 project.el and xref.el.")
       (license license:gpl3+))))
 
+(define-public emacs-citre
+  (package
+    (name "emacs-citre")
+    (version "0.3.1")
+    (source
+     (origin
+       (method git-fetch)
+       (uri (git-reference
+             (url "https://github.com/universal-ctags/citre/")
+             (commit (string-append "v" version))))
+       (sha256
+        (base32 "168z6yidh2nxkmdlx9cqdzzb7achxdipnbk5pj9787m9bp1sdpkd"))
+       (file-name (git-file-name name version))))
+    (build-system emacs-build-system)
+    (arguments
+     (list
+      #:phases
+      #~(modify-phases %standard-phases
+          (add-after 'unpack 'patch-citre-ctags-program
+            (lambda* (#:key inputs #:allow-other-keys)
+              (emacs-substitute-sexps "citre-ctags.el"
+                ("defcustom citre-ctags-program"
+                 (string-append (assoc-ref inputs "universal-ctags")
+                                "/bin/ctags")))))
+          (add-after 'unpack 'patch-citre-readtags-program
+            (lambda* (#:key inputs #:allow-other-keys)
+              (emacs-substitute-sexps "citre-readtags.el"
+                ("defcustom citre-readtags-program"
+                 (string-append (assoc-ref inputs "universal-ctags")
+                                "/bin/readtags")))))
+          (add-after 'unpack 'patch-citre-gtags-program
+            (lambda* (#:key inputs #:allow-other-keys)
+              (emacs-substitute-sexps "citre-global.el"
+                ("defcustom citre-gtags-program"
+                 (string-append (assoc-ref inputs "global")
+                                "/bin/gtags")))))
+          (add-after 'unpack 'patch-citre-global-program
+            (lambda* (#:key inputs #:allow-other-keys)
+              (emacs-substitute-sexps "citre-global.el"
+                ("defcustom citre-global-program"
+                 (string-append (assoc-ref inputs "global")
+                                "/bin/global"))))))))
+    (inputs (list global universal-ctags))
+    (home-page "https://github.com/universal-ctags/citre")
+    (synopsis "Ctags IDE on the True Editor")
+    (description
+     "Citre is an advanced Ctags (or actually, readtags) frontend for
+Emacs. It offers:
+
+@itemize
+@item completion-at-point, xref and imenu integration.
+@item citre-jump: A completing-read UI for jumping to definition.
+@item citre-peek: A powerful code reading tool that lets you go down the
+rabbit hole without leaving current buffer.
+@end itemize\n")
+    (license license:gpl3+)))
+
 (define-public emacs-seq
   (package
     (name "emacs-seq")
