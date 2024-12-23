@@ -39,6 +39,7 @@
   #:use-module (guix build-system qt)
   #:use-module (guix build-system gnu)
   #:use-module (guix build-system glib-or-gtk)
+  #:use-module (guix build-system meson)
   #:use-module (guix build-system trivial)
   #:use-module (guix packages)
   #:use-module (guix utils)
@@ -48,9 +49,11 @@
   #:use-module (gnu packages admin)
   #:use-module (gnu packages base)
   #:use-module (gnu packages bash)
+  #:use-module (gnu packages cinnamon)
   #:use-module (gnu packages crypto)
   #:use-module (gnu packages fontutils)
   #:use-module (gnu packages freedesktop)
+  #:use-module (gnu packages gettext)
   #:use-module (gnu packages gl)
   #:use-module (gnu packages glib)
   #:use-module (gnu packages gnome)
@@ -59,6 +62,7 @@
   #:use-module (gnu packages guile)
   #:use-module (gnu packages image)
   #:use-module (gnu packages kde-frameworks)
+  #:use-module (gnu packages libcanberra)
   #:use-module (gnu packages linux)
   #:use-module (gnu packages pkg-config)
   #:use-module (gnu packages python)
@@ -460,6 +464,108 @@ experience for your users, your family and yourself")
     (description "The Light Display Manager (LightDM) is a cross-desktop
 display manager which supports different greeters.")
     (license license:gpl3+)))
+
+(define-public slick-greeter
+  (package
+    (name "slick-greeter")
+    (version "2.0.8")
+    (source (origin
+              (method git-fetch)
+              (uri (git-reference
+                    (url "https://github.com/linuxmint/slick-greeter")
+                    (commit version)))
+              (file-name (git-file-name name version))
+              (sha256
+               (base32
+                "0pk8d8mpnrh70xdi9mfn1h5xkrf09v06vbi1p1wzqdskzfh3ci1n"))))
+    (build-system meson-build-system)
+    (arguments
+     (list
+      #:glib-or-gtk? #t
+      #:configure-flags
+      #~(list
+         ;; Put the binary under /bin rather than /sbin, so that it gets
+         ;; wrapped by the glib-or-gtk-wrap phase.
+         (string-append "--sbindir=" #$output "/bin"))
+      #:phases
+      #~(modify-phases %standard-phases
+          (add-after 'unpack 'patch-hardcoded-paths
+            (lambda _
+              (substitute* '("src/slick-greeter.vala"
+                             "src/session-list.vala")
+                (("/usr/bin/slick-greeter-")
+                 (string-append #$output "/bin/slick-greeter-"))
+                (("/usr/share/slick-greeter/badges/")
+                 (string-append #$output "/share/slick-greeter/badges/"))
+                (("/usr/share/xsessions/")
+                 "/run/current-system/profile/share/xsessions/")
+                (("/usr/share/wayland-sessions/")
+                 "/run/current-system/profile/share/wayland-sessions/"))))
+          (add-after 'glib-or-gtk-wrap 'custom-wrap
+            (lambda* (#:key outputs #:allow-other-keys)
+              (wrap-script (search-input-file
+                            outputs "bin/slick-greeter")
+                ;; Wrap GDK_PIXBUF_MODULE_FILE, so that the SVG loader is
+                ;; available at all times even outside of profiles, such as
+                ;; when used in the lightdm-service-type.  Otherwise, it
+                ;; wouldn't be able to display its own icons.
+                `("GDK_PIXBUF_MODULE_FILE" =
+                  (,(search-input-file
+                     outputs
+                     "lib/gdk-pixbuf-2.0/2.10.0/loaders.cache")))
+                `("XDG_DATA_DIRS" ":" prefix
+                  (,(string-append "/run/current-system/profile/share:"
+                                   (getenv "XDG_DATA_DIRS"))))
+                '("XCURSOR_PATH" ":" prefix
+                  ("/run/current-system/profile/share/icons")))))
+          (add-after 'install 'wrap-program
+            (lambda* (#:key outputs #:allow-other-keys)
+              (for-each (lambda (prog)
+                          (wrap-program (string-append #$output "/bin/" prog)
+                            `("GUIX_PYTHONPATH"      ":" prefix (,(getenv "GUIX_PYTHONPATH")))
+                            `("GI_TYPELIB_PATH" ":" prefix (,(getenv "GI_TYPELIB_PATH")))))
+                        '("slick-greeter-check-hidpi"
+                          "slick-greeter-set-keyboard-layout"
+                          "slick-greeter-enable-tap-to-click"))))
+          (add-after 'install 'fix-.desktop-file
+            (lambda* (#:key outputs #:allow-other-keys)
+              (substitute* (search-input-file
+                            outputs
+                            "share/xgreeters/slick-greeter.desktop")
+                (("Exec=slick-greeter")
+                 (string-append "Exec="
+                                (search-input-file
+                                 outputs "bin/slick-greeter")))))))))
+    (native-inputs
+     (list gettext-minimal
+           gnome-common
+           (list glib "bin")
+           pkg-config
+           vala))
+    (inputs
+     (list at-spi2-core
+           bash-minimal                 ;for wrap-program
+           dbus
+           dbus-glib
+           gtk+
+           guile-3.0
+           libcanberra
+           libgnomekbd
+           libxapp
+           libxkbfile
+           lightdm
+           pixman
+           python-wrapper
+           python-pygobject
+           shared-mime-info
+           xvfb-run))
+    (synopsis "A slick-looking LightDM greeter")
+    (home-page "https://github.com/linuxmint/slick-greeter")
+    (description "Slick-Greeter is a fork of Unity Greeter 16.04.2, it is
+cross-distribution and work pretty much anywhere, it supports HiDPI, If a
+default/chosen session isn't present on the system, it will scans for known
+sessions dirs and replaces the invalid session choice with a valid session.")
+    (license license:gpl3)))
 
 (define-public lightdm-gtk-greeter
   (package
